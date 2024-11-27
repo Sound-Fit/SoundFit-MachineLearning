@@ -1,3 +1,4 @@
+import random
 from flask import Flask, request, jsonify
 import requests
 import numpy as np
@@ -15,7 +16,8 @@ initialize_app(cred, {'storageBucket': 'soundfit-bfedd.appspot.com'})  # Ganti d
 app = Flask(__name__)
 
 # Load model
-model = joblib.load('assets/svc_canny_model_acc_0.463.pkl')  # Ganti dengan path model Anda
+# model = joblib.load('assets/svc_canny_model_acc_0.463.pkl')
+model = joblib.load('assets/xgboost_canny_model_acc_0.514.pkl')  # Ganti dengan path model Anda
 
 # Fungsi untuk mengunduh gambar dari URL Firebase Storage
 def download_image(image_url):
@@ -47,13 +49,13 @@ def face_detection(image):
         
         # Deteksi wajah
         # faces = face_cascade.detectMultiScale(gray_image, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
-        faces = face_cascade.detectMultiScale(gray_image, scaleFactor=1.1, minNeighbors=4, minSize=(40, 40))
-
+        faces = face_cascade.detectMultiScale(gray_image, scaleFactor=1.1, minNeighbors=3, minSize=(40, 40))
         
         # Jika wajah terdeteksi, potong wajah pertama
         if len(faces) > 0:
             x, y, w, h = faces[0]  # Ambil koordinat wajah pertama
             return image[y:y+h, x:x+w]  # Crop wajah
+        
         return None
     except cv2.error as e:
         print(f"OpenCV error: {e}")
@@ -62,22 +64,54 @@ def face_detection(image):
         print(f"General error: {e}")
         return None
 
-# Fungsi untuk mengekstrak fitur dan klasifikasi umur
+def augment_image(image):
+    augmented_image = image.copy()
+
+    # Random horizontal flip
+    if random.random() > 0.5:
+        augmented_image = cv2.flip(augmented_image, 1)
+
+    # Random brightness/contrast adjustment
+    if random.random() > 0.5:
+        alpha = random.uniform(0.7, 1.3)  # Random contrast factor
+        beta = random.randint(-50, 50)    # Random brightness factor
+        augmented_image = cv2.convertScaleAbs(augmented_image, alpha=alpha, beta=beta)
+
+    # Random rotation (±15 degrees)
+    if random.random() > 0.5:
+        angle = random.randint(-15, 15)  # Random angle for rotation
+        h, w = augmented_image.shape[:2]
+        center = (w // 2, h // 2)
+        rotation_matrix = cv2.getRotationMatrix2D(center, angle, 1.0)
+        augmented_image = cv2.warpAffine(augmented_image, rotation_matrix, (w, h))
+
+    # Random Gaussian blur
+    if random.random() > 0.5:
+        ksize = random.choice([3, 5, 7])  # Random kernel size
+        augmented_image = cv2.GaussianBlur(augmented_image, (ksize, ksize), 0)
+
+    return augmented_image
+
 # Fungsi untuk mengekstrak fitur dan klasifikasi umur
 def extract_features_and_predict(image, model):
     def features_grid(img):
         features = np.array([], dtype='uint8')
-        section = 1
         for y in range(0, img.shape[0], 10):
             for x in range(0, img.shape[1], 10):
+                # Cropping the image into a section.
                 section_img = img[y:y+10, x:x+10]
+
+                # Claculating the mean and stdev of the sectioned image.
                 section_mean = np.mean(section_img)
                 section_std = np.std(section_img)
+
+                # Appending the above calculated values into features array.
                 features = np.append(features, [section_mean, section_std])
         return features
 
     def extract_canny_edges(image):
-        img_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        img = augment_image(image)
+        img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         img_resized = cv2.resize(img_gray, (200, 200))
         img_canny = cv2.Canny(img_resized, threshold1=100, threshold2=200)
         return features_grid(img_canny)
