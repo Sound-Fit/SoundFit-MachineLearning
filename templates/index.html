@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Age Detection Result</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 0;
+        background-color: #f4f4f9;
+        color: #333;
+        line-height: 1.6;
+      }
+      main {
+        max-width: 800px;
+        margin: 20px auto;
+        padding: 20px;
+        background: #fff;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        border-radius: 5px;
+      }
+      h1 {
+        color: #4caf50;
+        margin-bottom: 20px;
+      }
+      p {
+        font-size: 16px;
+        margin: 10px 0;
+      }
+      .feature-container {
+        background: #f4f4f9;
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        max-height: 300px; /* Limit the height */
+        overflow-y: scroll; /* Enable vertical scrolling */
+      }
+      .feature-container ul {
+        list-style-type: none;
+        padding: 0;
+        margin: 0;
+        font-size: 14px;
+      }
+      .feature-container ul li {
+        padding: 5px;
+        border-bottom: 1px solid #eee;
+      }
+      .feature-container ul li:last-child {
+        border-bottom: none; /* Remove border from the last item */
+      }
+      a {
+        color: #4caf50;
+        text-decoration: none;
+        font-weight: bold;
+      }
+      a:hover {
+        text-decoration: underline;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Predicted Age</h1>
+      <p><strong>Crop Image</strong></p>
+      <img src="{{ image }}" alt="Cropped Image" width="200" height="200">
+      <p><strong>Canny Image</strong></p>
+      <img src="{{ canny_img }}" alt="Cropped Image" width="200" height="200">
+      <p><strong>Age Range:</strong> {{ age }}</p>
+      <h2>Feature Array</h2>
+      <div class="feature-container">
+        <ul>
+          <!-- Loop over the feature array and display each item -->
+          {% for item in feature %}
+          <li>{{ item }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+      <a href="/">&#8592; Go Back</a>
+    </main>
+  </body>
+</html>
