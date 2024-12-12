@@ -16,8 +16,7 @@ initialize_app(cred, {'storageBucket': 'soundfit-bfedd.appspot.com'})  # Ganti d
 app = Flask(__name__)
 
 # Load model
-# model = joblib.load('assets/svc_canny_model_acc_0.463.pkl')
-model = joblib.load('assets/xgboost_canny_model_acc_0.611.pkl')  # Ganti dengan path model Anda
+model = joblib.load('assets/svm_canny_model_0.42.pkl')  # Ganti dengan path model Anda
 
 # Fungsi untuk mengunduh gambar dari URL Firebase Storage
 def download_image(image_url):
@@ -30,7 +29,7 @@ def download_image(image_url):
         return None
 
 # Fungsi untuk mendeteksi wajah
-def face_detection(image):
+def face_detection(image, size=(200, 200)):
     try:
         cascade_path = "assets/haarcascade_frontalface_default.xml"  # Path ke model cascade
         if not os.path.exists(cascade_path):
@@ -44,19 +43,33 @@ def face_detection(image):
         else:
             print("Cascade classifier loaded successfully.")
         
-        # Konversi gambar ke grayscale
-        gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        
         # Deteksi wajah
-        # faces = face_cascade.detectMultiScale(gray_image, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
-        faces = face_cascade.detectMultiScale(gray_image, scaleFactor=1.1, minNeighbors=3, minSize=(40, 40))
+        faces = face_cascade.detectMultiScale(image, scaleFactor=1.1, minNeighbors=5, minSize=(20, 20))
         
         # Jika wajah terdeteksi, potong wajah pertama
         if len(faces) > 0:
+            # Cari wajah dengan frame terbesar
             largest_face = max(faces, key=lambda rect: rect[2] * rect[3])  # Pilih berdasarkan area (w * h)
             x, y, w, h = largest_face
-            return image[y:y+h, x:x+w]  # Crop wajah
-        
+            
+            # Memotong gambar sesuai area deteksi wajah terbesar
+            face_crop = image[y:y + h, x:x + w]
+            face_crop = cv2.resize(face_crop, size)
+
+            # Mengurangi area gambar sebesar 10% (90% dari ukuran asli)
+            height, width = face_crop.shape[:2]
+            new_height = int(height * 0.70)
+            new_width = int(width * 0.70)
+
+            # Menghitung margin untuk cropping agar tetap di tengah
+            top_margin = (height - new_height) // 2
+            left_margin = (width - new_width) // 2
+
+            # Memotong area gambar
+            face_crop = face_crop[top_margin:top_margin + new_height, left_margin:left_margin + new_width]
+            return face_crop
+
+        print("No face detected.")
         return None
     except cv2.error as e:
         print(f"OpenCV error: {e}")
@@ -67,26 +80,27 @@ def face_detection(image):
 
 # Fungsi untuk mengekstrak fitur dan klasifikasi umur
 def extract_features_and_predict(image, model):
-    def features_grid(img):
-        features = np.array([], dtype='uint8')
-        for y in range(0, img.shape[0], 10):
-            for x in range(0, img.shape[1], 10):
-                # Cropping the image into a section.
-                section_img = img[y:y+10, x:x+10]
+    def features_quadrants(img):
+        # Calculate mean and std for 64 quadrants of the image.
+        h, w = img.shape  # Ambil tinggi dan lebar gambar
+        h_step, w_step = h // 8, w // 8  # Ukuran setiap kuadran (dibagi 8x8)
 
-                # Claculating the mean and stdev of the sectioned image.
-                section_mean = np.mean(section_img)
-                section_std = np.std(section_img)
+        features = []
+        for i in range(8):  # Iterasi untuk setiap baris kuadran
+            for j in range(8):  # Iterasi untuk setiap kolom kuadran
+                # Potong kuadran berdasarkan indeks
+                quad = img[i * h_step:(i + 1) * h_step, j * w_step:(j + 1) * w_step]
+                features.append(np.mean(quad))  # Hitung mean kuadran
+                features.append(np.std(quad))   # Hitung std kuadran
+                features.append(np.sum(quad))   # Hitung sum kuadran
 
-                # Appending the above calculated values into features array.
-                features = np.append(features, [section_mean, section_std])
-        return features
+        return np.array(features, dtype='float32')
 
     def extract_canny_edges(image):
         img_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         img_resized = cv2.resize(img_gray, (200, 200))
         img_canny = cv2.Canny(img_resized, threshold1=100, threshold2=200)
-        return features_grid(img_canny)
+        return features_quadrants(img_canny)
 
     # Ekstrak fitur dan lakukan prediksi
     features = extract_canny_edges(image)
