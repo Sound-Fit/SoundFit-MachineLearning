@@ -16,7 +16,7 @@ initialize_app(cred, {'storageBucket': 'soundfit-bfedd.appspot.com'})  # Ganti d
 app = Flask(__name__)
 
 # Load model
-model = joblib.load('assets/svm_canny_model_0.42.pkl')  # Ganti dengan path model Anda
+model = joblib.load('assets/nn_20_canny_model_0.58.pkl')  # Ganti dengan path model Anda
 
 # Fungsi untuk mengunduh gambar dari URL Firebase Storage
 def download_image(image_url):
@@ -81,13 +81,12 @@ def face_detection(image, size=(200, 200)):
 # Fungsi untuk mengekstrak fitur dan klasifikasi umur
 def extract_features_and_predict(image, model):
     def features_quadrants(img):
-        # Calculate mean and std for 64 quadrants of the image.
         h, w = img.shape  # Ambil tinggi dan lebar gambar
-        h_step, w_step = h // 8, w // 8  # Ukuran setiap kuadran (dibagi 8x8)
+        h_step, w_step = h // 20, w // 20  # Ukuran setiap kuadran (dibagi 20x20)
 
         features = []
-        for i in range(8):  # Iterasi untuk setiap baris kuadran
-            for j in range(8):  # Iterasi untuk setiap kolom kuadran
+        for i in range(20):  # Iterasi untuk setiap baris kuadran
+            for j in range(20):  # Iterasi untuk setiap kolom kuadran
                 # Potong kuadran berdasarkan indeks
                 quad = img[i * h_step:(i + 1) * h_step, j * w_step:(j + 1) * w_step]
                 features.append(np.mean(quad))  # Hitung mean kuadran
