@@ -18,7 +18,7 @@ initialize_app(cred, {'storageBucket': 'soundfit-bfedd.appspot.com'})
 app = Flask(__name__)
 
 # Load model
-model = joblib.load('assets/xgboost_canny_model_acc_0.611.pkl')  # Adjust to your model path
+model = joblib.load('assets/nn_20_canny_model_0.58.pkl')  # Adjust to your model path
 
 # Helper functions
 def download_image(image_url):
@@ -41,12 +41,29 @@ def face_detection(image):
         
         face_cascade = cv2.CascadeClassifier(cascade_path)
         gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        faces = face_cascade.detectMultiScale(gray_image, scaleFactor=1.1, minNeighbors=3, minSize=(40, 40))
+        faces = face_cascade.detectMultiScale(gray_image, scaleFactor=1.1, minNeighbors=3, minSize=(30, 30))
         
         if len(faces) > 0:
             largest_face = max(faces, key=lambda rect: rect[2] * rect[3])  # Pilih berdasarkan area (w * h)
             x, y, w, h = largest_face
-            return image[y:y+h, x:x+w]
+            
+            # Memotong gambar sesuai area deteksi wajah terbesar
+            face_crop = image[y:y + h, x:x + w]
+            face_crop = cv2.resize(face_crop, (200, 200))
+
+            # Mengurangi area gambar sebesar 10% (90% dari ukuran asli)
+            height, width = face_crop.shape[:2]
+            new_height = int(height * 0.70)
+            new_width = int(width * 0.70)
+
+            # Menghitung margin untuk cropping agar tetap di tengah
+            top_margin = (height - new_height) // 2
+            left_margin = (width - new_width) // 2
+
+            # Memotong area gambar
+            face_crop = face_crop[top_margin:top_margin + new_height, left_margin:left_margin + new_width]
+            face_crop = cv2.resize(face_crop, (200, 200))
+            return face_crop
         return None
     except Exception as e:
         print(f"Face detection error: {e}")
@@ -59,13 +76,23 @@ def extract_features_and_predict(image, model):
         for y in range(0, img.shape[0], 10):
             for x in range(0, img.shape[1], 10):
                 section = img[y:y+10, x:x+10]
-                features.extend([np.mean(section), np.std(section)])
+                features.extend([np.mean(section), np.std(section), np.sum(section)])
         return np.array(features, dtype='float32')
 
     def extract_canny_edges(image):
         img_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         img_resized = cv2.resize(img_gray, (200, 200))
-        img_canny = cv2.Canny(img_resized, 100, 200)
+        
+        # Calculate the median of the pixel intensities
+        median = np.median(img_resized)
+
+        # Define thresholds based on sigma
+        sigma = 0.9  # adjust this as needed
+        lower = int(max(0, (1.0 - sigma) * median))
+        upper = int(min(255, (1.0 + sigma) * median))
+
+        # Apply Canny edge detection with dynamic thresholds
+        img_canny = cv2.Canny(img_resized, lower, upper)
         return features_grid(img_canny), img_canny
 
     features, canny_image = extract_canny_edges(image)

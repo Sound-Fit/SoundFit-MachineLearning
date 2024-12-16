@@ -44,7 +44,7 @@ def face_detection(image, size=(200, 200)):
             print("Cascade classifier loaded successfully.")
         
         # Deteksi wajah
-        faces = face_cascade.detectMultiScale(image, scaleFactor=1.1, minNeighbors=5, minSize=(20, 20))
+        faces = face_cascade.detectMultiScale(image, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
         
         # Jika wajah terdeteksi, potong wajah pertama
         if len(faces) > 0:
@@ -67,6 +67,7 @@ def face_detection(image, size=(200, 200)):
 
             # Memotong area gambar
             face_crop = face_crop[top_margin:top_margin + new_height, left_margin:left_margin + new_width]
+            face_crop = cv2.resize(face_crop, size)
             return face_crop
 
         print("No face detected.")
@@ -98,7 +99,16 @@ def extract_features_and_predict(image, model):
     def extract_canny_edges(image):
         img_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         img_resized = cv2.resize(img_gray, (200, 200))
-        img_canny = cv2.Canny(img_resized, threshold1=100, threshold2=200)
+        # Calculate the median of the pixel intensities
+        median = np.median(img_resized)
+
+        # Define thresholds based on sigma
+        sigma = 0.9  # adjust this as needed
+        lower = int(max(0, (1.0 - sigma) * median))
+        upper = int(min(255, (1.0 + sigma) * median))
+
+        # Apply Canny edge detection with dynamic thresholds
+        img_canny = cv2.Canny(img_resized, lower, upper)
         return features_quadrants(img_canny)
 
     # Ekstrak fitur dan lakukan prediksi
@@ -135,7 +145,7 @@ def age_detection():
 
         cropped_face = face_detection(image)
         if cropped_face is None:
-            return jsonify({"error": "Face not detected!"}), 400
+            return jsonify({"message": "Face not detected!", "predicted_age": 6})
 
         predicted_age = extract_features_and_predict(cropped_face, model)
         if predicted_age == "Face not detected!":
